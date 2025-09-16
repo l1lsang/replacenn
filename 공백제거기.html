@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>연속 줄바꿈 제거기</title>
+  <style>
+    :root{--bg:#0f172a;--card:#0b1220;--accent:#60a5fa;--muted:#94a3b8;color-scheme:dark}
+    html,body{height:100%;margin:0;font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;color:#e6eef8;background:linear-gradient(180deg,#071025 0%, #071428 100%);}
+    .wrap{max-width:980px;margin:28px auto;padding:20px;}
+    header{display:flex;align-items:center;gap:16px;margin-bottom:14px}
+    h1{font-size:20px;margin:0}
+    p.subtitle{margin:0;color:var(--muted);font-size:13px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    textarea{width:100%;height:320px;padding:14px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));color:#e6eef8;resize:vertical;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace;}
+    .controls{background:rgba(255,255,255,0.02);padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.03);display:flex;flex-direction:column;gap:10px}
+    .row{display:flex;gap:8px;align-items:center}
+    label{font-size:13px;color:var(--muted)}
+    input[type=number]{width:68px;padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+    .btns{display:flex;gap:8px;margin-top:6px}
+    button{background:var(--accent);border:none;padding:8px 12px;border-radius:8px;color:#04122a;font-weight:600;cursor:pointer}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+    .meta{font-size:13px;color:var(--muted);display:flex;gap:14px;align-items:center}
+    footer{margin-top:14px;color:var(--muted);font-size:13px;text-align:center}
+    @media (max-width:880px){.grid{grid-template-columns:1fr;}.wrap{padding:12px}} 
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>연속 줄바꿈 제거기 — 웹 버전 ✨</h1>
+        <p class="subtitle">여러 줄의 빈 줄(또는 연속 줄바꿈)을 한 번에 정리해줍니다. 간단하고 빠르게 처리해보세요.</p>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div>
+        <label for="input">원본 텍스트</label>
+        <textarea id="input" placeholder="여기에 붙여넣기 하세요..."></textarea>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+          <div class="meta">
+            <span id="chars">문자: 0</span>
+            <span id="lines">행: 0</span>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button id="clear" class="ghost">지우기</button>
+            <button id="process">정리하기 (Ctrl+Enter)</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="controls">
+          <div class="row">
+            <input type="checkbox" id="normalize" checked />
+            <label for="normalize">CRLF(\\r\\n)를 LF(\\n)로 변환</label>
+          </div>
+
+          <div class="row">
+            <input type="checkbox" id="trim" />
+            <label for="trim">앞/뒤의 공백 줄 제거</label>
+          </div>
+
+          <div class="row">
+            <input type="checkbox" id="collapse" checked />
+            <label for="collapse">연속 줄바꿈을 축약 (아래 숫자만큼 유지)</label>
+          </div>
+
+          <div class="row">
+            <label for="max">최대 연속 줄바꿈 수</label>
+            <input id="max" type="number" min="1" value="1" />
+            <span style="color:var(--muted);font-size:13px">(1이면 연속 줄바꿈을 한 줄로 축약)</span>
+          </div>
+
+          <div style="display:flex;gap:8px;align-items:center">
+            <button id="copy" class="ghost">복사</button>
+            <button id="download" class="ghost">다운로드</button>
+            <button id="previewToggle" class="ghost">미리보기 토글</button>
+          </div>
+
+          <div style="font-size:13px;color:var(--muted)">단축키: <strong>Ctrl+Enter</strong>로 처리</div>
+        </div>
+
+        <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+          <label for="output">결과</label>
+          <textarea id="output" readonly placeholder="정리 결과가 여기에 표시됩니다."></textarea>
+        </div>
+      </div>
+    </div>
+
+    <footer>간단한 테스트: 여러 줄을 붙여넣고 정리하기를 눌러보세요. 필요하면 옵션을 바꿔서 실험해도 좋아요 😊</footer>
+  </div>
+
+  <script>
+    const input = document.getElementById('input');
+    const output = document.getElementById('output');
+    const chars = document.getElementById('chars');
+    const lines = document.getElementById('lines');
+    const processBtn = document.getElementById('process');
+    const clearBtn = document.getElementById('clear');
+    const copyBtn = document.getElementById('copy');
+    const downloadBtn = document.getElementById('download');
+    const normalizeChk = document.getElementById('normalize');
+    const trimChk = document.getElementById('trim');
+    const collapseChk = document.getElementById('collapse');
+    const maxInput = document.getElementById('max');
+
+    function updateMeta(){
+      const v = input.value;
+      chars.textContent = '문자: ' + v.length;
+      lines.textContent = '행: ' + (v === '' ? 0 : v.split(/\\r?\\n/).length);
+    }
+
+    function processText(){
+      let t = input.value;
+      if(normalizeChk.checked){
+        // 모든 CRLF -> LF
+        t = t.replace(/\\r\\n/g,'\\n').replace(/\\r/g,'\\n');
+      }
+
+      // 텍스트 안의 "\\n" 문자열을 실제 줄바꿈으로 변환
+      t = t.replace(/\\\\n/g, '\n');
+
+      if(trimChk.checked){
+        // 앞과 뒤의 빈 줄(공백+줄바꿈) 제거
+        t = t.replace(/^\s*\n+/, '');
+        t = t.replace(/\n+\s*$/, '');
+      }
+
+      if(collapseChk.checked){
+        const max = Math.max(1, parseInt(maxInput.value) || 1);
+        const repl = '\n'.repeat(max);
+        t = t.replace(/(\n\s*){2,}/g, repl);
+      }
+
+      output.value = t;
+      try{navigator.clipboard && (copyBtn.disabled = false);}catch(e){}
+      return t;
+    }
+
+    input.addEventListener('input', updateMeta);
+    processBtn.addEventListener('click', ()=>{ processText(); updateMeta(); });
+    clearBtn.addEventListener('click', ()=>{ input.value=''; output.value=''; updateMeta(); });
+
+    copyBtn.addEventListener('click', async ()=>{
+      try{
+        await navigator.clipboard.writeText(output.value);
+        copyBtn.textContent = '복사됨!';
+        setTimeout(()=> copyBtn.textContent='복사',900);
+      }catch(e){
+        alert('브라우저가 복사 권한을 허용하지 않았습니다.');
+      }
+    });
+
+    downloadBtn.addEventListener('click', ()=>{
+      const blob = new Blob([output.value], {type:'text/plain;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'cleaned.txt';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    document.addEventListener('keydown', (e)=>{
+      if((e.ctrlKey || e.metaKey) && e.key === 'Enter'){
+        e.preventDefault();
+        processBtn.click();
+      }
+    });
+
+    updateMeta();
+  </script>
+</body>
+</html>
